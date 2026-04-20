@@ -271,6 +271,8 @@ def main() -> int:
     parser.add_argument("--no-progress", action="store_true", help="Disable progress output")
     parser.add_argument("--async", dest="async_mode", metavar="TASK_ID",
                         help="Async mode: write progress+result to temp/codex/TASK_ID.json")
+    parser.add_argument("--json", "-j", action="store_true",
+                        help="Output result as structured JSON (for programmatic use)")
     parser.add_argument("--save-session", action="store_true", default=True,
                         help="Save session ID for later resume (default: True)")
 
@@ -470,6 +472,21 @@ def main() -> int:
     if async_status_path:
         _write_async_status(async_status_path, "done", "Completed",
                            result=result[:8000], thread_id=thread_id or "")
+
+    if args.json:
+        # Structured JSON output for programmatic use
+        out = {
+            "status": "error" if has_error else "ok",
+            "exit_code": proc.returncode,
+            "result": result,
+        }
+        if thread_id:
+            out["thread_id"] = thread_id
+        if async_status_path:
+            pass  # async mode already wrote status file
+        else:
+            print(json.dumps(out, ensure_ascii=False))
+        return proc.returncode
 
     if result:
         # safe print: avoid GBK codec crash on Windows
