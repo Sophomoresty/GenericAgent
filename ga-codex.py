@@ -472,7 +472,12 @@ def main() -> int:
                            result=result[:8000], thread_id=thread_id or "")
 
     if result:
-        print(result)
+        # safe print: avoid GBK codec crash on Windows
+        try:
+            print(result)
+        except UnicodeEncodeError:
+            sys.stdout.buffer.write(result.encode("utf-8", errors="replace"))
+            sys.stdout.buffer.write(b"\n")
     else:
         if show_progress:
             progress_warn("No text output from codex")
