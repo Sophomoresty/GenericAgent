@@ -236,13 +236,19 @@ def build_codex_command(
     parts.append(f'-m "{model}"')
 
     if workdir:
-        parts.append(f'-C "{workdir}"')
+        # Sanitize: strip quotes to prevent shell injection
+        safe_dir = workdir.replace('"', '').replace("'", "").replace("`", "")
+        parts.append(f'-C "{safe_dir}"')
 
     if session_id:
         parts.append(f"resume {session_id}")
 
     # Prompt: pipe via stdin using heredoc to avoid shell escaping issues
     codex_cmd = " ".join(parts)
+    # Sanitize prompt: reject if it contains the heredoc delimiter
+    if "GA_CODEX_EOF" in prompt:
+        # Replace to prevent injection
+        prompt = prompt.replace("GA_CODEX_EOF", "GA_CODEX_DELIM_REMOVED")
     # Use heredoc for prompt delivery (no timeout wrapper - Python handles timeout)
     inner = f'{codex_cmd} - <<\'GA_CODEX_EOF\'\n{prompt}\nGA_CODEX_EOF'
     cmd.append(inner)
