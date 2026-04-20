@@ -681,9 +681,19 @@ class _MsgRow(QWidget):
             self._adjust_browser_height()
 
     def set_finished(self, done: bool):
+        was_finished = self._finished
         self._finished = done
         if not done and self._action_row:
             self._action_row.hide()
+        if done and not was_finished and self._role != "user":
+            self._render_assistant_text(render_markdown=True)
+
+    def _render_assistant_text(self, render_markdown: bool):
+        if render_markdown:
+            self._label.setHtml(_md_to_html(self._text))
+        else:
+            self._label.setPlainText(self._text)
+        self._adjust_browser_height()
 
     def _adjust_browser_height(self):
         doc = self._label.document()
@@ -699,8 +709,7 @@ class _MsgRow(QWidget):
             self._label.setText(text)
             self._label.adjustSize()
         else:
-            self._label.setHtml(_md_to_html(text))
-            self._adjust_browser_height()
+            self._render_assistant_text(render_markdown=self._finished)
 
 
 class _TabButton(QPushButton):
