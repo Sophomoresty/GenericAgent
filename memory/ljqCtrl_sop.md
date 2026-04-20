@@ -1,4 +1,5 @@
 # ljqCtrl 使用与坐标转换 SOP
+<!-- aliases: 键鼠|键盘|鼠标|点击|输入模拟|自动化操作|坐标转换|pyautogui替代 -->
 
 > **must call update working ckp**：`ljqCtrl一律使用物理坐标｜禁pyautogui｜操作前先gw激活窗口`
 

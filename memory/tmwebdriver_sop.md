@@ -1,4 +1,5 @@
 # TMWebDriver SOP
+<!-- aliases: 文件上传|upload|图搜|PDF|物理坐标|HttpOnly|Cookie|autofill|跨域iframe|CDP|跨tab|浏览器操作 -->
 
 - 直接用web_scan/web_execute_js工具。本文件只记录特性和坑。
 - 底层：`../TMWebDriver.py`通过Chrome扩展接管用户浏览器（保留登录态/Cookie）

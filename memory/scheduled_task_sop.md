@@ -1,4 +1,5 @@
 # 定时任务 SOP
+<!-- aliases: 定时任务|cron|scheduler|每周|定时巡检|计划任务|scheduled|task -->
 
 目录：`../sche_tasks/` 放任务定义JSON，`../sche_tasks/done/` 放执行报告
 

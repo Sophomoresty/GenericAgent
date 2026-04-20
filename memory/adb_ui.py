@@ -1,4 +1,5 @@
 # adb_ui.py - 一键dump+解析Android UI (u2优先，原生fallback)
+# aliases: 手机|Android|adb|UI dump|自动化测试|弹窗检测
 # u2 (uiautomator2) 不受idle限制，适合动画密集app（美团等）
 # 弹窗检测: ui(clickable_only=True, raw=True) 找全屏FrameLayout+底部小ImageView(关闭X)
 # 已知包名: 美团外卖=com.sankuai.meituan.takeoutnew 淘宝=com.taobao.taobao

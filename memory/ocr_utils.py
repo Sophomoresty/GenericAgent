@@ -1,4 +1,5 @@
 """
+# aliases: OCR|文字识别|rapidocr|文本提取
 本地 OCR 工具
 - OCR引擎: rapidocr-onnxruntime (~1s/次, 中英文准确率高, 带bbox)
 - 坑(rapid): result[i][2] conf 是 str 不是 float

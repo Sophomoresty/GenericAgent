@@ -1,4 +1,5 @@
 # Vision API SOP
+<!-- aliases: 截图|screenshot|视觉|屏幕识别|屏幕比对|图像识别 -->
 
 ## ⚠️ 前置规则（必须遵守）
 

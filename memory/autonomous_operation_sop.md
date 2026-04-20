@@ -1,4 +1,5 @@
 # 自主行动 SOP
+<!-- aliases: 自主行动|自主巡检|用户离开|自动执行|watchdog|autonomous -->
 
 ⚠️ **路径警告**：autonomous_reports 在 temp/ 下，用`./autonomous_reports/`访问，**不是**`../memory/autonomous_reports/`或`../autonomous_reports/`！TODO在cwd下。
 报告存于 `./autonomous_reports/`，文件名 `RXX_简短描述.md`（XX从 history.txt 推断自增）。
