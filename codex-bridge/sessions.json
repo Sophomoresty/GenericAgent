@@ -1,0 +1,86 @@
+{
+  "019dab67-3b42-7db2-a1d2-8c710a519640": {
+    "model": "gpt-5.4",
+    "role": null,
+    "workdir": "",
+    "created": "2026-04-20T22:59:38",
+    "last_active": "2026-04-20T22:59:38"
+  },
+  "019dab6b-0dbe-7ed3-b115-5e130af6ccd9": {
+    "model": "gpt-5.4",
+    "role": null,
+    "workdir": "",
+    "created": "2026-04-20T23:03:49",
+    "last_active": "2026-04-20T23:03:49"
+  },
+  "019dab6c-3e2a-7110-b917-c40f0190a9c7": {
+    "model": "gpt-5.4",
+    "role": null,
+    "workdir": "/home/sophomores",
+    "created": "2026-04-20T23:06:49",
+    "last_active": "2026-04-20T23:06:49"
+  },
+  "019dab70-b266-7b63-aa1b-cc60494da68c": {
+    "model": "gpt-5.4",
+    "role": null,
+    "workdir": "/home/sophomores",
+    "created": "2026-04-20T23:10:32",
+    "last_active": "2026-04-20T23:10:32"
+  },
+  "019dab78-e124-70f3-8d40-28ca1d7e0416": {
+    "model": "gpt-5.4",
+    "role": null,
+    "workdir": "/home/sophomores",
+    "created": "2026-04-20T23:18:56",
+    "last_active": "2026-04-20T23:18:56"
+  },
+  "019dab97-27e4-7e51-859a-0e826dd9f644": {
+    "model": "gpt-5.4",
+    "role": null,
+    "workdir": "/home/sophomores/code/clis/ccglm",
+    "created": "2026-04-20T23:53:02",
+    "last_active": "2026-04-20T23:53:02"
+  },
+  "019dab9e-03e5-7552-8a77-ba7941015528": {
+    "model": "gpt-5.4",
+    "role": null,
+    "workdir": "/home/sophomores",
+    "created": "2026-04-21T00:01:15",
+    "last_active": "2026-04-21T00:01:15"
+  },
+  "019dabbc-93d7-75c0-b1f8-1a8ad99e51b1": {
+    "model": "gpt-5.4",
+    "role": null,
+    "workdir": "",
+    "created": "2026-04-21T00:33:06",
+    "last_active": "2026-04-21T00:33:06"
+  },
+  "019dabbe-b3bc-7c20-9a44-4b0d3418da1e": {
+    "model": "gpt-5.4",
+    "role": null,
+    "workdir": "",
+    "created": "2026-04-21T00:35:35",
+    "last_active": "2026-04-21T00:35:35"
+  },
+  "019dabbf-e59d-7741-9f3a-d0684d80ade5": {
+    "model": "gpt-5.4",
+    "role": null,
+    "workdir": "",
+    "created": "2026-04-21T00:37:26",
+    "last_active": "2026-04-21T00:37:26"
+  },
+  "019dabc1-8e4a-75a0-8e1f-f0dbf081df20": {
+    "model": "gpt-5.4",
+    "role": null,
+    "workdir": "",
+    "created": "2026-04-21T00:39:01",
+    "last_active": "2026-04-21T00:39:01"
+  },
+  "019dabca-b070-7343-a391-4e78b6974dbb": {
+    "model": "gpt-5.4",
+    "role": null,
+    "workdir": "",
+    "created": "2026-04-21T00:49:23",
+    "last_active": "2026-04-21T00:49:23"
+  }
+}
