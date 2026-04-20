@@ -1,0 +1,72 @@
+# [Global Memory - L2]
+
+## [Codex]
+- codex根目录: ~/.codex (WSL: /home/sophomores/.codex)
+- AGENTS.md: ~/.codex/AGENTS.md (人格+规则+skill规范+执行约束)
+- Skills目录: ~/.codex/skills/ (约81个skill, 按目录组织, 每个含SKILL.md+子目录)
+- Skill frontmatter规范: description写触发条件(Use when...), owner: sophomores标记用户自定义skill
+- ccglm项目: /home/sophomores/code/clis/ccglm (CLI工具, 通过claude_agent_sdk调用Claude)
+- ccglm-delegate skill: ~/.codex/skills/ccglm-delegate/ (总入口routed skill, 按场景路由到ccglm)
+- ccglm profiles: default/frontend/analysis/plan/review
+- ccglm slot: ~/.cache/ccglm/active-run.json (运行时锁)
+- 429重试: sdk_driver内建(指数退避+jitter, 3次, 异常路径也捕获)
+- memory_tool.py架构: build_asset_index()返回的dict中executables/runbooks/patterns在payload["memory"]子dict下(非顶层); scan_asset_records取值需payload.get("memory",{}).get("executables",[])
+- executable系统: ~/.codex/memory/executables/ 存放可复用脚本模板, build_asset_index.discover_executables()扫描注册, command_route自动打分路由
+
+## [GA↔Codex桥接]
+- ga-codex.py: D:\code\GenericAgent\ga-codex.py + ga-codex.bat
+  - 功能: GA→Codex方向, 通过WSL调 `codex exec --json`, 实时解析JSONL流
+  - 参数: --progress --session --workdir --role --file --model --timeout --async
+  - --async TASK_ID: 异步模式, 进度+结果写 temp/codex/TASK_ID.json (status: running/done/error)
+  - roles/: codex-bridge/roles/ (architect/reviewer/analyzer/debugger)
+  - JSONL事件: thread.started → turn.started → item.started(command_execution) → item.completed(command_execution+agent_message) → turn.completed
+  - timeout: Python subprocess超时(非shell timeout包装), 避免exit code被覆盖
+- codex_delegate.py: 待建, GA端异步委托工具(submit/status/result), 不阻塞agent loop
+- ga-ask.bat: Codex→GA方向 ✅ (v2, commit 57d8f77, timeout/progress/encoding/error-recovery)
+- ga-bridge SKILL.md: ✅ 已部署 ~/.codex/skills/ga-bridge/SKILL.md (commit fb9fc2b后)
+- ga-codex.bat: ✅ 已加 chcp 65001 + -X utf8 (aefe335)
+- ga-codex.py: ✅ 已加 --json输出 + heredoc注入防护 + workdir净化 (aefe335, fb9fc2b)
+
+## [GA内建工具]
+- sop_search.py: memory/sop_search.py, 本地SOP搜索CLI, TF+别名加权, 索引文件 .sop_index.json
+
+## [SOP触发统计]
+- 统计周期: 2026-04
+- 任务收尾次数: 4
+- 自检命中次数: 3 (codex记忆+sop_search+桥接review: 命中#2多工具协同+#6耗时长)
+- 实际生成 SOP: 1 (ga_codex_bridge_sop)
+- 用户拒绝次数: 0
+- 触发率: 3/4=0.75 (目标 ≥ 0.3) ✅
+- 采纳率: 1/3=0.33 (目标 ≥ 0.5) ⚠偏低
+
+## [GA源码贡献]
+- 上游: lsdefine/GenericAgent (main)
+- Fork: Sophomoresty/GenericAgent
+- gh pr create可能报git not found，用 gh api /repos/lsdefine/GenericAgent/pulls -f head=Sophomoresty:分支 替代
+- Windows行尾CRLF导致diff膨胀，用 --ignore-cr-at-eol 看真实改动量
+- PR #121: context compression优化(estimate_tokens/摘要保留/TextClient限流/工具返回截断)
+
+## [用户环境]
+- WSL: Ubuntu_01_25
+- 用户: sophomores
+- 包管理: uv优先 > pip
+- Python虚拟环境: 每项目独立venv, 全局PATH无python(勿注册uv python到全局,各项目依赖隔离)
+- ga.bat/ga-ask.bat: 用 `.venv\Scripts\python.exe` 而非裸 `python`(cmd.exe找不到全局python)
+- 浏览器工具链持久目录: ~/.local/share/browser-binaries/
+- 缓存目录(可重建): ~/.cache
+
+## [CLI工具箱] (通过WSL调用, 如 wsl -d Ubuntu_01_25 -- <cli> <subcmd>)
+- ccglm: Claude SDK调用器, 子命令: doctor/run/start/revise/complete/status/summary/logs/watch, 源码: ~/code/clis/ccglm
+- codex-memo: 项目记忆管理, 子命令: d/ov/b/r/i/f/a/k/p/s/c/n/v, 脚本: ~/.codex/scripts/codex_memo.py
+  - ⚠ 双文件架构: codex_memo.py=CLI入口(argparse+命令分发), memory_tool.py=核心逻辑(frontmatter/registry/route). 改CLI参数必须改codex_memo.py, 不能只改memory_tool.py
+  - ⚠ skill目录有独立副本: ~/.codex/skills/project-memory-loop/scripts/ 下有codex_memo.py和memory_tool.py, 修改后必须cp同步
+  - memory_tool.py: 记忆note frontmatter解析+registry, ~/.codex/scripts/memory_tool.py
+  - evolution_tool.py: 记忆进化(写回建议/过期淘汰), ~/.codex/scripts/evolution_tool.py
+  - lib/: evolution_promote/evolution_schema/evolution_signals/evolution_store/procedural_candidates/reuse_learning/runtime_checkpoint/session_archive/task_status/verifier_sidecar
+- agent-browser-cli: 浏览器MCP管理, 子命令: start/stop/status/doctor/extension-path/list-tabs/switch-tab/open-url/scan-page/execute-js/cdp-command
+- cdrive-clean: C盘清理, 子命令: doctor/scan/inspect/safe-clean/report
+- git-activity-report: git活动报告, 子命令: doctor/scan/summary/render
+- codex-mcp: MCP server动态切换, 子命令: status/off/use/run (支持: context7/fetch/playwright/jshook/github/memory/sequential-thinking)
+- linuxdo-ai-digest: LinuxDo AI文摘
+- jsh: JS工具
+- codexui-start/stop/status: Codex UI管理
