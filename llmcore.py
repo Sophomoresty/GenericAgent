@@ -20,19 +20,37 @@ def __getattr__(name):
         return globals()[name]
     raise AttributeError(f"module 'llmcore' has no attribute {name}")
 
+def estimate_tokens(text):
+    """Estimate token count without external dependencies.
+    CJK chars ≈ 1.5 tokens, ASCII ≈ 0.25 tokens/char, others ≈ 0.7."""
+    if not isinstance(text, str): text = json.dumps(text, ensure_ascii=False)
+    cjk = sum(1 for c in text if '\u4e00' <= c <= '\u9fff' or '\u3040' <= c <= '\u30ff' or '\uac00' <= c <= '\ud7af')
+    total = len(text)
+    non_cjk = total - cjk
+    return int(cjk * 1.5 + non_cjk * 0.25 + 0.5)
+
+def _msg_tokens(msg):
+    """Estimate tokens for a single message dict."""
+    return estimate_tokens(json.dumps(msg, ensure_ascii=False))
+
 def compress_history_tags(messages, keep_recent=10, max_len=800, force=False):
-    """Compress <thinking>/<tool_use>/<tool_result> tags in older messages to save tokens."""
+    """Compress <thinking>/<tool_use>/<tool_result> tags in older messages to save tokens.
+    Also truncates large tool_result content blocks directly."""
     compress_history_tags._cd = getattr(compress_history_tags, '_cd', 0) + 1
     if force: compress_history_tags._cd = 0
     if compress_history_tags._cd % 5 != 0: return messages
-    _before = sum(len(json.dumps(m, ensure_ascii=False)) for m in messages)
+    _before = sum(_msg_tokens(m) for m in messages)
     _pats = {tag: re.compile(rf'(<{tag}>)([\s\S]*?)(</{tag}>)') for tag in ('thinking', 'think', 'tool_use', 'tool_result')}
     _hist_pat = re.compile(r'<(history|key_info)>[\s\S]*?</\1>')
-    def _trunc_str(s): return s[:max_len//2] + '\n...[Truncated]...\n' + s[-max_len//2:] if isinstance(s, str) and len(s) > max_len else s
+    def _trunc_str(s, ml=None):
+        if not isinstance(s, str): return s
+        ml = ml or max_len
+        return s[:ml//2] + '\n...[Truncated]...\n' + s[-ml//2:] if len(s) > ml else s
     def _trunc(text):
         text = _hist_pat.sub(lambda m: f'<{m.group(1)}>[...]</{m.group(1)}>', text)
         for pat in _pats.values(): text = pat.sub(lambda m: m.group(1) + _trunc_str(m.group(2)) + m.group(3), text)
         return text
+    _BIG_TOOL_MAX = 2000  # chars threshold for direct tool_result truncation
     for i, msg in enumerate(messages):
         if i >= len(messages) - keep_recent: break
         c = msg['content']
@@ -44,13 +62,18 @@ def compress_history_tags(messages, keep_recent=10, max_len=800, force=False):
                 if t == 'text' and isinstance(b.get('text'), str): b['text'] = _trunc(b['text'])
                 elif t == 'tool_result':
                     tc = b.get('content')
-                    if isinstance(tc, str): b['content'] = _trunc_str(tc)
+                    if isinstance(tc, str) and len(tc) > _BIG_TOOL_MAX: b['content'] = _trunc_str(tc, _BIG_TOOL_MAX)
+                    elif isinstance(tc, str): b['content'] = _trunc_str(tc)
                     elif isinstance(tc, list):
                         for sub in tc:
-                            if isinstance(sub, dict) and sub.get('type') == 'text': sub['text'] = _trunc_str(sub.get('text'))
+                            if isinstance(sub, dict) and sub.get('type') == 'text':
+                                txt = sub.get('text', '')
+                                if len(txt) > _BIG_TOOL_MAX: sub['text'] = _trunc_str(txt, _BIG_TOOL_MAX)
+                                else: sub['text'] = _trunc_str(txt)
                 elif t == 'tool_use' and isinstance(b.get('input'), dict):
                     for k, v in b['input'].items(): b['input'][k] = _trunc_str(v)
-    print(f"[Cut] {_before} -> {sum(len(json.dumps(m, ensure_ascii=False)) for m in messages)}")
+    _after = sum(_msg_tokens(m) for m in messages)
+    print(f"[Cut] {_before} -> {_after} est.tokens (saved {_before - _after})")
     return messages
 
 def _sanitize_leading_user_msg(msg):
@@ -71,19 +94,62 @@ def _sanitize_leading_user_msg(msg):
     msg['content'] = [{"type": "text", "text": '\n'.join(t for t in texts if t)}]
     return msg
 
+def _summarize_messages(msgs):
+    """Extract key info from messages being trimmed: tool names, file paths, status words."""
+    summaries = []
+    for m in msgs:
+        role = m.get('role', '')
+        c = m.get('content')
+        if isinstance(c, list):
+            texts = []
+            for b in c:
+                if not isinstance(b, dict): continue
+                if b.get('type') == 'text' and b.get('text'):
+                    texts.append(b['text'][:200])
+                elif b.get('type') == 'tool_use':
+                    name = b.get('name', '')
+                    inp = b.get('input', {})
+                    key_vals = {k: (str(v)[:60] if isinstance(v, str) else str(v)[:30]) for k, v in inp.items() if k != '_index'}
+                    texts.append(f"[Called {name}({key_vals})]")
+                elif b.get('type') == 'tool_result':
+                    tc = b.get('content', '')
+                    if isinstance(tc, list):
+                        tc = ' '.join(b.get('text', '')[:80] for b in tc if isinstance(b, dict))
+                    texts.append(f"[Result: {str(tc)[:120]}]")
+            text = ' | '.join(texts)
+        elif isinstance(c, str):
+            text = c[:300]
+        else:
+            text = ''
+        if text:
+            tag = role.upper()[0]
+            summaries.append(f"[{tag}] {text[:250]}")
+    body = '\n'.join(summaries)
+    if len(body) > 2000:
+        body = body[:1000] + '\n...[summary truncated]...\n' + body[-800:]
+    return body
+
 def trim_messages_history(history, context_win):
     compress_history_tags(history)
-    cost = sum(len(json.dumps(m, ensure_ascii=False)) for m in history) 
-    print(f'[Debug] Current context: {cost} chars, {len(history)} messages.')
+    cost = sum(_msg_tokens(m) for m in history) 
+    print(f'[Debug] Current context: ~{cost} est.tokens, {len(history)} messages.')
     if cost > context_win * 3: 
         compress_history_tags(history, keep_recent=4, force=True)   # trim breaks cache, so compress more btw
         target = context_win * 3 * 0.6
+        removed = []
         while len(history) > 5 and cost > target:
-            history.pop(0)
-            while history and history[0].get('role') != 'user': history.pop(0)
+            removed.append(history.pop(0))
+            # also remove following non-user messages (assistant continuation)
+            while history and history[0].get('role') != 'user': removed.append(history.pop(0))
             if history and history[0].get('role') == 'user': history[0] = _sanitize_leading_user_msg(history[0])
-            cost = sum(len(json.dumps(m, ensure_ascii=False)) for m in history)
-        print(f'[Debug] Trimmed context, current: {cost} chars, {len(history)} messages.')
+            cost = sum(_msg_tokens(m) for m in history)
+        # Prepend a summary of removed messages to preserve context
+        if removed:
+            summary_text = _summarize_messages(removed)
+            summary_msg = {"role": "user", "content": [{"type": "text", "text": f"[Context Summary - earlier messages trimmed]\n{summary_text}"}]}
+            history.insert(0, summary_msg)
+            cost = sum(_msg_tokens(m) for m in history)
+        print(f'[Debug] Trimmed context, current: ~{cost} est.tokens, {len(history)} messages.')
 
 def auto_make_url(base, path):
     b, p = base.rstrip('/'), path.strip('/')
@@ -721,6 +787,10 @@ Follow these steps to think and act:
         system_content = next((m['content'] for m in messages if m['role'].lower() == 'system'), "")
         history_msgs = [m for m in messages if m['role'].lower() != 'system']
         tool_instruction = self._prepare_tool_instruction(tools)
+        # Limit history to prevent context explosion (TextClient has no other compression)
+        _MAX_HISTORY_MSGS = 30
+        if len(history_msgs) > _MAX_HISTORY_MSGS:
+            history_msgs = history_msgs[-_MAX_HISTORY_MSGS:]
         system = ""; user = ""
         if system_content: system += f"{system_content}\n"
         system += f"{tool_instruction}"
