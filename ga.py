@@ -481,7 +481,30 @@ class GenericAgentHandler(BaseHandler):
             remaining = self._check_plan_completion()
             if remaining == 0:
                 self._exit_plan_mode(); yield "[Info] Plan完成：plan.md中0个[ ]残留，退出plan模式。\n"
-        
+
+        # 3. 检测"只做口头计划, 未真正调用工具"的空转
+        # 常见于某些 OAI 兼容中转: 模型会输出 thinking/summary 或说"需要先读文件/搜索",
+        # 但没有发出原生 tool call. 这类回复不能直接收口, 必须强制再生成为工具调用。
+        plain = re.sub(r"<thinking>[\s\S]*?</thinking>", "", content, flags=re.IGNORECASE)
+        plain = re.sub(r"<summary>[\s\S]*?</summary>", "", plain, flags=re.IGNORECASE).strip()
+        need_tool_patterns = [
+            r"\b(use|call|invoke|read|search|open|inspect|check|locate|find)\b",
+            r"(需要|先|读取|搜索|打开|检查|定位|查找|调用工具|继续工具调用|tool call|tool use|file_read|code_run|file_patch)"
+        ]
+        looks_like_tool_intent = any(re.search(p, content, re.IGNORECASE) for p in need_tool_patterns)
+        if looks_like_tool_intent and len(plain) <= 80:
+            yield "[Warn] Text-only planning without tool call detected. Forcing native tool call regeneration.\n"
+            next_prompt = (
+                "[System] 你上一轮判断了需要工具, 但没有真正发出工具调用。\n"
+                "这不允许直接结束。\n"
+                "如果任务还未完成, 请在本轮直接输出原生工具调用, 不要只写<thinking>/<summary>或口头计划。\n"
+                "要求:\n"
+                "1. 若需要工具, 本轮必须至少发出一个 tool call.\n"
+                "2. 不要只说'先读取/先搜索/继续排查'.\n"
+                "3. 若确实无需工具且任务已完成, 必须直接给出最终答案并解释依据.\n"
+            )
+            return StepOutcome({}, next_prompt=next_prompt)
+
         yield "[Info] Final response to user.\n"
         return StepOutcome(response, next_prompt=None)
     
