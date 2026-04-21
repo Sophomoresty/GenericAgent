@@ -286,6 +286,7 @@ def _stamp_oai_cache_markers(messages, model):
 
 def _openai_stream(api_base, api_key, messages, model, api_mode='chat_completions', *,
                    temperature=0.5, max_tokens=None, tools=None, reasoning_effort=None,
+                   extra_body=None,
                    max_retries=0, connect_timeout=10, read_timeout=300, proxies=None,
                    stream=True):
     """Shared OpenAI-compatible streaming request with retry. Yields text chunks, returns list[content_block]."""
@@ -305,6 +306,8 @@ def _openai_stream(api_base, api_key, messages, model, api_mode='chat_completion
         if temperature != 1: payload["temperature"] = temperature
         if max_tokens: payload["max_tokens"] = max_tokens
         if reasoning_effort: payload["reasoning_effort"] = reasoning_effort
+    if isinstance(extra_body, dict) and extra_body:
+        payload.update(extra_body)
     if tools: payload["tools"] = _prepare_oai_tools(tools, api_mode)
     RETRYABLE = {408, 409, 425, 429, 500, 502, 503, 504, 529}
     def _delay(resp, attempt):
@@ -456,6 +459,7 @@ class BaseSession:
         self.api_mode = 'responses' if mode in ('responses', 'response') else 'chat_completions'
         self.temperature = cfg.get('temperature', 1)
         self.max_tokens = cfg.get('max_tokens', 8192)
+        self.extra_body = cfg.get('extra_body') if isinstance(cfg.get('extra_body'), dict) else None
     def _apply_claude_thinking(self, payload):
         if self.thinking_type:
             thinking = {"type": self.thinking_type}
@@ -512,7 +516,8 @@ class LLMSession(BaseSession):
     def raw_ask(self, messages):
         return (yield from _openai_stream(self.api_base, self.api_key, messages, self.model, self.api_mode,
                                   temperature=self.temperature, reasoning_effort=self.reasoning_effort,
-                                  max_tokens=self.max_tokens, max_retries=self.max_retries, stream=self.stream,
+                                  max_tokens=self.max_tokens, extra_body=self.extra_body,
+                                  max_retries=self.max_retries, stream=self.stream,
                                   connect_timeout=self.connect_timeout, read_timeout=self.read_timeout, proxies=self.proxies))
     def make_messages(self, raw_list): return _msgs_claude2oai(raw_list)
 
@@ -623,6 +628,7 @@ class NativeOAISession(NativeClaudeSession):
         return (yield from _openai_stream(self.api_base, self.api_key, msgs, self.model, self.api_mode,
                                           temperature=self.temperature, max_tokens=self.max_tokens,
                                           tools=self.tools, reasoning_effort=self.reasoning_effort,
+                                          extra_body=self.extra_body,
                                           max_retries=self.max_retries, connect_timeout=self.connect_timeout,
                                           read_timeout=self.read_timeout, proxies=self.proxies, stream=self.stream))
 

@@ -6,7 +6,7 @@
 codex: ~/.codex/AGENTS.md(人格+规则) + skills/(~81个) | ccglm: ~/.codex/skills/ccglm-delegate + L2详情
 CLI工具箱: ccglm/codex-memo(agent-browser/cdrive-clean/git-activity-report等 → L2 [CLI工具箱]
 codex-memo坑: 改CLI参数→改codex_memo.py(非memory_tool.py); skill目录副本需同步
-GA↔Codex联动: ga-codex.py(同步+--async+--json) + ga-ask.bat | ga_codex_bridge_sop(架构+坑+测试) | L2详情
+GA命令: ga gui[--tg/--qq/--feishu/--wecom/--dingtalk/--sched](Streamlit+pywebview,pythonw无终端) | ga-codex/ga-ask同上
 ⚠ bat调用python: 全局PATH无python, bat/shell必须用 `.venv\Scripts\python.exe` 绝对/相对路径, 禁裸python
 | 分层: L0(本SOP) L2(global_mem.txt) L3(memory/*.md) L4(raw_sessions) | 需详情时read L2或ls ../memory/
 L3 SOP 触发索引 (关键词命中→读对应SOP):

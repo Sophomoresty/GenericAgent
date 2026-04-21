@@ -27,6 +27,11 @@
 - ga-codex.bat: ✅ 已加 chcp 65001 + -X utf8 (aefe335)
 - ga-codex.py: ✅ 已加 --json输出 + heredoc注入防护 + workdir净化 (aefe335, fb9fc2b)
 
+## [GA CLI命令]
+- ga.bat: 主入口, gui子命令→pythonw静默启动ga-gui.pyw, 其他→agentmain.py
+- ga-gui.pyw: GUI启动器(Streamlit+pywebview), 支持--tg/--qq/--feishu/--wecom/--dingtalk/--sched, 用pythonw运行无终端, 所有子进程CREATE_NO_WINDOW隐藏
+- launch.pyw: 原pywebview+Streamlit启动器(含idle_monitor), ga-gui.pyw基于此
+
 ## [GA内建工具]
 - sop_search.py: memory/sop_search.py, 本地SOP搜索CLI, TF+别名加权, 索引文件 .sop_index.json
 
