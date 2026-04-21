@@ -186,17 +186,26 @@ def expand_file_refs(text, base_dir=None):
     return re.sub(pattern, replacer, text)
     
 def file_patch(path: str, old_content: str, new_content: str):
-    """在文件中寻找唯一的 old_content 块并替换为 new_content"""
+    """文件局部修改，保持原始行尾格式"""
     path = str(Path(path).resolve())
     try:
         if not os.path.exists(path): return {"status": "error", "msg": "文件不存在"}
-        with open(path, 'r', encoding='utf-8') as f: full_text = f.read()
+        with open(path, 'rb') as f: raw = f.read()
+        _has_crlf = b'\r\n' in raw
+        full_text = raw.decode('utf-8')
+        if _has_crlf:
+            old_content = old_content.replace('\n', '\r\n')
+            new_content = new_content.replace('\n', '\r\n')
+            full_text = full_text.replace('\r\n', '\n')
         if not old_content: return {"status": "error", "msg": "old_content 为空，请确认 arguments"}
         count = full_text.count(old_content)
         if count == 0: return {"status": "error", "msg": "未找到匹配的旧文本块，建议：先用 file_read 确认当前内容，再分小段进行 patch。若多次失败则询问用户，严禁自行使用 overwrite 或代码替换。"}
         if count > 1: return {"status": "error", "msg": f"找到 {count} 处匹配，无法确定唯一位置。请提供更长、更具体的旧文本块以确保唯一性。建议：包含上下文行来增强特征，或分小段逐个修改。"}
         updated_text = full_text.replace(old_content, new_content)
-        with open(path, 'w', encoding='utf-8') as f: f.write(updated_text)
+        with open(path, 'wb') as f:
+            data = updated_text.encode('utf-8')
+            if _has_crlf: data = data.replace(b'\n', b'\r\n')
+            f.write(data)
         return {"status": "success", "msg": "文件局部修改成功"}
     except Exception as e: return {"status": "error", "msg": str(e)}
 
