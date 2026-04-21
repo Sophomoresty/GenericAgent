@@ -911,13 +911,13 @@ class NativeToolClient:
     def _thinking_prompt(): return THINKING_PROMPT_EN if os.environ.get('GA_LANG') == 'en' else THINKING_PROMPT_ZH
     def __init__(self, backend):
         self.backend = backend
-        self.backend.system = self._thinking_prompt()
+        self.backend.system = ''
         self.name = self.backend.name
         self._pending_tool_ids = []
     def set_system(self, extra_system):
-        combined = f"{extra_system}\n\n{self._thinking_prompt()}" if extra_system else self._thinking_prompt()
-        if combined != self.backend.system: print(f"[Debug] Updated system prompt, length {len(combined)} chars.")
-        self.backend.system = combined
+        if extra_system != self.backend.system:
+            print(f"[Debug] Updated system prompt, length {len(extra_system)} chars.")
+        self.backend.system = extra_system or ''
     def chat(self, messages, tools=None):
         if tools: self.backend.tools = tools
         combined_content = []; resp = None; tool_results = []
