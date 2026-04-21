@@ -902,14 +902,14 @@ THINKING_PROMPT_ZH = """
 每次回复请遵循：
 1. 在 <thinking></thinking> 标签中先分析现状和策略
 2. 在 <summary></summary> 中输出极简单行（<30字）物理快照：上次结果新信息+本次意图。此内容进入长期工作记忆。
-3. 如果本轮需要工具, 必须在同一条回复里直接发出原生工具调用. 禁止只输出 thinking/summary 或口头计划后停住.
+3. 然后才能输出工具调用
 """.strip()
 THINKING_PROMPT_EN = """
 ### Action Protocol (always in effect)
 For every reply, follow these steps:
 1. Analyze the current situation and strategy inside <thinking></thinking>
 2. Output a minimal one-line (<30 words) physical snapshot in <summary></summary>: new info from last result + current intent. This goes into long-term working memory.
-3. If tools are needed this turn, you MUST emit native tool calls in the same response. Do not stop after thinking/summary or a text-only plan.
+3. Then output tool calls
 """.strip()
 
 class NativeToolClient:
