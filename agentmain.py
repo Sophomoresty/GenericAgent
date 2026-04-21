@@ -65,7 +65,7 @@ class GeneraticAgent:
         self.lock = threading.Lock()
         self.task_dir = None
         self.history = []
-        self.task_queue = queue.Queue() 
+        self.task_queue = queue.Queue()
         self.is_running = False; self.stop_sig = False
         self.llm_no = 0;  self.inc_out = False
         self.handler = None; self.verbose = True
@@ -92,26 +92,25 @@ class GeneraticAgent:
         print('Abort current task...')
         self.stop_sig = True
         if self.handler is not None: self.handler.code_stop_signal.append(1)
-            
+
     def put_task(self, query, source="user", images=None):
         display_queue = queue.Queue()
         self.task_queue.put({"query": query, "source": source, "images": images or [], "output": display_queue})
         return display_queue
 
-    # i know it is dangerous, but raw_query is dangerous enough it doesn't enlarge
     def _handle_slash_cmd(self, raw_query, display_queue):
         if not raw_query.startswith('/'): return raw_query
         if _sm := re.match(r'/session\.(\w+)=(.*)', raw_query.strip()):
             k, v = _sm.group(1), _sm.group(2)
             vfile = os.path.join(script_dir, 'temp', v)
             if os.path.isfile(vfile): v = open(vfile, encoding='utf-8').read().strip()
-            try: v = json.loads(v)  # cover number parsing
+            try: v = json.loads(v)
             except (json.JSONDecodeError, ValueError): pass
             setattr(self.llmclient.backend, k, v)
             display_queue.put({'done': smart_format(f"✅ session.{k} = {repr(v)}", max_str_len=500), 'source': 'system'})
             return None
         if raw_query.strip() == '/resume':
-            return r'用re.findall(r"<history>\\n\[(?:USER\|Agent)\].*?</history>", content, re.DOTALL) 扫temp/model_responses/下各文件(除本PID)，取每文件最后一个匹配(注意JSON里换行是字面\\n)作为该会话内容，按mtime倒序，每个用一句话总结聊了什么让我选择；选定后再简单读该文件末尾作为聊天基础'
+            return r'用re.findall(r"<history>\\n\[(?:USER\|Agent)\].*?</history>", content, re.DOTALL) 扫temp/model_responses/下时间最近的10个文件(除本PID)，取每文件最后一个匹配(注意JSON里换行是字面\\n)作为该会话内容，按mtime倒序，每个用一句话总结聊了什么让我选择；选定后再简单读该文件末尾作为聊天基础'
         return raw_query
 
     def run(self):
@@ -124,27 +123,26 @@ class GeneraticAgent:
             self.is_running = True
             rquery = smart_format(raw_query.replace('\n', ' '), max_str_len=200)
             self.history.append(f"[USER]: {rquery}")
-            
+
             sys_prompt = get_system_prompt() + getattr(self.llmclient.backend, 'extra_sys_prompt', '')
             script_dir = os.path.dirname(os.path.abspath(__file__))
             handler = GenericAgentHandler(self, self.history, os.path.join(script_dir, 'temp'))
-            if self.handler and 'key_info' in self.handler.working: 
-                ki = re.sub(r'\n\[SYSTEM\] 此为.*?工作记忆[。\n]*', '', self.handler.working['key_info'])  # 去旧
+            if self.handler and 'key_info' in self.handler.working:
+                ki = re.sub(r'\n\[SYSTEM\] 此为.*?工作记忆[。\n]*', '', self.handler.working['key_info'])
                 handler.working['key_info'] = ki
                 handler.working['passed_sessions'] = ps = self.handler.working.get('passed_sessions', 0) + 1
                 if ps > 0: handler.working['key_info'] += f'\n[SYSTEM] 此为 {ps} 个对话前设置的key_info，若已在新任务，先更新或清除工作记忆。\n'
             self.handler = handler
             user_input = raw_query
-            if source == 'feishu' and len(self.history) > 1:   # 如果有历史记录且来自飞书，注入到首轮 user_input 中（支持/restore恢复上下文）
+            if source == 'feishu' and len(self.history) > 1:
                 user_input = handler._get_anchor_prompt() + f"\n\n### 用户当前消息\n{raw_query}"
             if 'gpt' in self.get_llm_name(model=True): handler._done_hooks.append('请确定用户任务是否完成，如未完成需要继续工具调用直到完成任务，确实需要问用户应使用ask_user工具')
-            # although new handler, the **full** history is in llmclient, so it is full history!
-            gen = agent_runner_loop(self.llmclient, sys_prompt, user_input, 
+            gen = agent_runner_loop(self.llmclient, sys_prompt, user_input,
                                 handler, TOOLS_SCHEMA, max_turns=40, verbose=self.verbose)
             try:
                 full_resp = ""; last_pos = 0
                 for chunk in gen:
-                    if consume_file(self.task_dir, '_stop'): self.abort() 
+                    if consume_file(self.task_dir, '_stop'): self.abort()
                     if self.stop_sig: break
                     full_resp += chunk
                     if len(full_resp) - last_pos > 50 or 'LLM Running' in chunk:
@@ -152,7 +150,7 @@ class GeneraticAgent:
                         last_pos = len(full_resp)
                 if self.inc_out and last_pos < len(full_resp): display_queue.put({'next': full_resp[last_pos:], 'source': source})
                 if '</summary>' in full_resp: full_resp = full_resp.replace('</summary>', '</summary>\n\n')
-                if '</file_content>' in full_resp: full_resp = re.sub(r'<file_content>\s*(.*?)\s*</file_content>', r'\n````\n<file_content>\n\1\n</file_content>\n````', full_resp, flags=re.DOTALL)                
+                if '</file_content>' in full_resp: full_resp = re.sub(r'<file_content>\s*(.*?)\s*</file_content>', r'\n````\n<file_content>\n\1\n</file_content>\n````', full_resp, flags=re.DOTALL)
                 display_queue.put({'done': full_resp, 'source': source})
                 self.history = handler.history_info
             except Exception as e:
@@ -161,12 +159,10 @@ class GeneraticAgent:
             finally:
                 if self.stop_sig:
                     print('User aborted the task.')
-                    #with self.task_queue.mutex: self.task_queue.queue.clear()
                 self.is_running = self.stop_sig = False
                 self.task_queue.task_done()
                 if self.handler is not None: self.handler.code_stop_signal.append(1)
 
-    
 if __name__ == '__main__':
     import argparse
     from datetime import datetime
@@ -204,17 +200,12 @@ if __name__ == '__main__':
         with open(infile, encoding='utf-8') as f: raw = f.read()
         while True:
             dq = agent.put_task(raw, source='task')
-            while 'done' not in (item := dq.get(timeout=120)): 
-                if 'next' in item and random.random() < 0.95:  # 概率写一次中间结果
+            while 'done' not in (item := dq.get(timeout=120)):
+                if 'next' in item and random.random() < 0.95:
                     with open(f'{d}/output{nround}.txt', 'w', encoding='utf-8') as f: f.write(item.get('next', ''))
-            done_text = item.get('done', '') or ''
-            if done_text.strip():
-                with open(f'{d}/output{nround}.txt', 'w', encoding='utf-8') as f: f.write(done_text + '\n\n[ROUND END]\n')
-            else:
-                # done为空时保留中间结果, 只追加标记
-                with open(f'{d}/output{nround}.txt', 'a', encoding='utf-8') as f: f.write('\n\n[ROUND END]\n')
-            if consume_file(d, '_stop'): break  # 外部要求立即停止(单次模式)
-            for _ in range(300):  # 等reply.txt，10分钟超时
+            with open(f'{d}/output{nround}.txt', 'w', encoding='utf-8') as f: f.write(item['done'] + '\n\n[ROUND END]\n')
+            consume_file(d, '_stop')
+            for _ in range(300):
                 time.sleep(2)
                 if (raw := consume_file(d, 'reply.txt')): break
             else: break
@@ -231,7 +222,7 @@ if __name__ == '__main__':
                 except Exception as e: print(f'[Reflect] reload error: {e}')
             time.sleep(getattr(mod, 'INTERVAL', 5))
             try: task = mod.check()
-            except Exception as e: 
+            except Exception as e:
                 print(f'[Reflect] check() error: {e}'); continue
             if task is None: continue
             print(f'[Reflect] triggered: {task[:80]}')

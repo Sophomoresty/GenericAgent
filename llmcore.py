@@ -1,7 +1,7 @@
 import os, json, re, time, requests, sys, threading, urllib3, base64, mimetypes, uuid
 from datetime import datetime
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
-_RESP_CACHE_KEY = str(uuid.uuid4()) 
+_RESP_CACHE_KEY = str(uuid.uuid4())
 
 def _load_mykeys():
     try:
@@ -11,12 +11,15 @@ def _load_mykeys():
     if not os.path.exists(p): raise Exception('[ERROR] mykey.py or mykey.json not found, please create one from mykey_template.')
     with open(p, encoding='utf-8') as f: return json.load(f)
 
-def __getattr__(name):
+def __getattr__(name):  # once guard in PEP 562
     if name in ('mykeys', 'proxies'):
         mk = _load_mykeys()
         proxy = mk.get("proxy", 'http://127.0.0.1:2082')
         px = {"http": proxy, "https": proxy} if proxy else None
         globals().update(mykeys=mk, proxies=px)
+        if mk.get('langfuse_config'):
+            try: from plugins import langfuse_tracing
+            except Exception: pass
         return globals()[name]
     raise AttributeError(f"module 'llmcore' has no attribute {name}")
 
@@ -108,12 +111,11 @@ def _parse_claude_sse(resp_lines):
         evt_type = evt.get("type", "")
         if evt_type == "message_start":
             usage = evt.get("message", {}).get("usage", {})
-            ci, cr, inp = usage.get("cache_creation_input_tokens", 0), usage.get("cache_read_input_tokens", 0), usage.get("input_tokens", 0)
-            print(f"[Cache] input={inp} creation={ci} read={cr}")
+            _record_usage(usage, "messages")
         elif evt_type == "content_block_start":
             block = evt.get("content_block", {})
             if block.get("type") == "text": current_block = {"type": "text", "text": ""}
-            elif block.get("type") == "thinking": current_block = {"type": "thinking", "thinking": ""}
+            elif block.get("type") == "thinking": current_block = {"type": "thinking", "thinking": "", "signature": ""}
             elif block.get("type") == "tool_use":
                 current_block = {"type": "tool_use", "id": block.get("id", ""), "name": block.get("name", ""), "input": {}}
                 tool_json_buf = ""
@@ -125,6 +127,9 @@ def _parse_claude_sse(resp_lines):
                 if text: yield text
             elif delta.get("type") == "thinking_delta":
                 if current_block and current_block.get("type") == "thinking": current_block["thinking"] += delta.get("thinking", "")
+            elif delta.get("type") == "signature_delta":
+                if current_block and current_block.get("type") == "thinking":
+                    current_block["signature"] = current_block.get("signature", "") + delta.get("signature", "")
             elif delta.get("type") == "input_json_delta": tool_json_buf += delta.get("partial_json", "")
         elif evt_type == "content_block_stop":
             if current_block:
@@ -194,9 +199,7 @@ def _parse_openai_sse(resp_lines, api_mode="chat_completions"):
                 break
             elif etype == "response.completed":
                 usage = evt.get("response", {}).get("usage", {})
-                cached = (usage.get("input_tokens_details") or {}).get("cached_tokens", 0)
-                inp = usage.get("input_tokens", 0)
-                if inp: print(f"[Cache] input={inp} cached={cached}")
+                _record_usage(usage, api_mode)
                 break
         blocks = []
         if content_text: blocks.append({"type": "text", "text": content_text})
@@ -226,9 +229,7 @@ def _parse_openai_sse(resp_lines, api_mode="chat_completions"):
                 if tc.get("function", {}).get("name"): tc_buf[idx]["name"] = tc["function"]["name"]
                 if tc.get("function", {}).get("arguments"): tc_buf[idx]["args"] += tc["function"]["arguments"]
             usage = evt.get("usage")
-            if usage:
-                cached = (usage.get("prompt_tokens_details") or {}).get("cached_tokens", 0)
-                print(f"[Cache] input={usage.get('prompt_tokens',0)} cached={cached}")
+            if usage: _record_usage(usage, api_mode)
         blocks = []
         if content_text: blocks.append({"type": "text", "text": content_text})
         for idx in sorted(tc_buf):
@@ -238,13 +239,24 @@ def _parse_openai_sse(resp_lines, api_mode="chat_completions"):
             blocks.append({"type": "tool_use", "id": tc["id"], "name": tc["name"], "input": inp})
         return blocks
 
+def _record_usage(usage, api_mode):
+    if not usage: return
+    if api_mode == 'responses':
+        cached = (usage.get("input_tokens_details") or {}).get("cached_tokens", 0)
+        inp = usage.get("input_tokens", 0)
+        print(f"[Cache] input={inp} cached={cached}")
+    elif api_mode == 'chat_completions':
+        cached = (usage.get("prompt_tokens_details") or {}).get("cached_tokens", 0)
+        inp = usage.get("prompt_tokens", 0)
+        print(f"[Cache] input={inp} cached={cached}")
+    elif api_mode == 'messages':
+        ci, cr, inp = usage.get("cache_creation_input_tokens", 0), usage.get("cache_read_input_tokens", 0), usage.get("input_tokens", 0)
+        print(f"[Cache] input={inp} creation={ci} read={cr}")
+
 def _parse_openai_json(data, api_mode="chat_completions"):
     blocks = []
     if api_mode == "responses":
-        usage = data.get("usage", {})
-        cached = (usage.get("input_tokens_details") or {}).get("cached_tokens", 0)
-        inp = usage.get("input_tokens", 0)
-        if inp: print(f"[Cache] input={inp} cached={cached}")
+        _record_usage(data.get("usage") or {}, api_mode)
         for item in (data.get("output") or []):
             if item.get("type") == "message":
                 for p in (item.get("content") or []):
@@ -256,10 +268,7 @@ def _parse_openai_json(data, api_mode="chat_completions"):
                 blocks.append({"type": "tool_use", "id": item.get("call_id", item.get("id", "")),
                                "name": item.get("name", ""), "input": args})
     else:
-        usage = data.get("usage") or {}
-        if usage:
-            cached = (usage.get("prompt_tokens_details") or {}).get("cached_tokens", 0)
-            print(f"[Cache] input={usage.get('prompt_tokens', 0)} cached={cached}")
+        _record_usage(data.get("usage") or {}, api_mode)
         msg = (data.get("choices") or [{}])[0].get("message", {})
         content = msg.get("content", "")
         if content:
@@ -582,8 +591,7 @@ class NativeClaudeSession(BaseSession):
                 if self.stream: return (yield from _parse_claude_sse(resp.iter_lines())) or []
                 else:
                     data = resp.json(); content_blocks = data.get("content", [])
-                    usage = data.get("usage", {})
-                    print(f"[Cache] input={usage.get('input_tokens',0)} creation={usage.get('cache_creation_input_tokens',0)} read={usage.get('cache_read_input_tokens',0)}")
+                    _record_usage(data.get("usage", {}), "messages")
                     for b in content_blocks:
                         if b.get("type") == "text": yield b.get("text", "")
                         elif b.get("type") == "thinking": yield ""
